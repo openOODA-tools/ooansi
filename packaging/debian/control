@@ -1,0 +1,14 @@
+Source: ooansi
+Section: utils
+Priority: optional
+Maintainer: openOODA-tools <ops@openooda.org>
+Standards-Version: 4.6.2
+Build-Depends: debhelper-compat (= 13)
+
+Package: ooansi
+Architecture: amd64
+Depends: libc6
+Description: SGR ESCAPES
+ Applies and strips Select Graphic Rendition (SGR) escape codes from text.
+ Capability-bounded openOODA utility with zero ambient authority,
+ oote theme palettes, and native Model Context Protocol (MCP) surface.
