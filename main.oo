@@ -1,52 +1,128 @@
-// # ooansi Main Entry Point
+// # ooansi Entry Point - ANSI Terminal Sequence Generator
 //
-// Logline: Applies and strips Select Graphic Rendition (SGR) escape codes from text.
+// Logline: Argument gate, sequence formatter, and capability-isolated ANSI engine.
 //
-// Setup: Demands explicit capability tokens and standard argument list.
+// Setup: Requires FsReadCap, ProcessCap, EnvCap. Operates with zero ambient authority.
 //
 // Beats:
-//   1. Parse command-line options and dispatch --help, --version, or --mcp.
-//   2. Execute capability-bounded ooansi operations.
-//   3. Format and output structured results to standard output.
+//   1. Handle --help, --version, and --mcp early without side effects.
+//   2. Parse command options and target sequence specifications.
+//   3. Emit formatted escape sequences or clean stripped text.
+
+import "core/anchor.oo";
+import "render/anchor.oo";
+import "ipc/anchor.oo";
 
 fn render_help() -> String {
-    return "ooansi 0.1.0 (openOODA sovereign theme & styling)\n"
-        + "usage: ooansi [options] [ARGUMENTS]...\n\n"
-        + "Applies and strips Select Graphic Rendition (SGR) escape codes from text.\n\n"
-        + "Options:\n"
-        + "  -h, --help           display this help and exit\n"
-        + "  -v, --version        output version information and exit\n"
-        + "      --json           output formatted as JSON Lines\n"
-        + "      --color <WHEN>   colorize output: auto, always, never [default: auto]\n"
-        + "      --theme <NAME>   override active oote palette\n"
-        + "      --mcp            run as Model Context Protocol stdio server\n";
+    return "Usage: ooansi [COMMAND] [ARGS...] [OPTIONS]\n\n" +
+        "ANSI terminal sequence generator.\n\n" +
+        "Commands:\n" +
+        "  color <NAME|#HEX>      Generate foreground color sequence\n" +
+        "  style <STYLE>          Generate style sequence (bold, dim, italic, underline)\n" +
+        "  cursor <ACTION> [N]    Generate cursor navigation sequence (up, down, pos)\n" +
+        "  clear <screen|line>    Generate terminal clear sequence\n" +
+        "  strip <TEXT>           Strip all ANSI escape codes from text\n" +
+        "  reset                  Generate full terminal formatting reset sequence\n\n" +
+        "Options:\n" +
+        "      --json             Output results formatted as JSON Lines\n" +
+        "      --mcp              Run as Model Context Protocol stdio server\n" +
+        "  -h, --help             Display this help and exit\n" +
+        "  -v, --version          Output version information and exit\n";
 }
 
-fn render_version() -> String {
-    return "ooansi 0.1.0 (openOODA sovereign theme & styling)\n";
-}
+pub fn main(
+    fs: &FsReadCap,
+    proc_cap: &ProcessCap,
+    env: &EnvCap,
+    args: List[String]
+) -> Result[Int, String] {
+    let opts: AnsiOpts = parse_ansi_args(args);
 
-fn main(args: List[String]) -> Int {
-    let num_args: Int = list_len(args);
-    let mut i: Int = 0;
-
-    while i < num_args {
-        let arg: String = list_get(args, i);
-        if arg == "-h" || arg == "--help" {
-            print(render_help());
-            return 0;
-        }
-        if arg == "-v" || arg == "--version" {
-            print(render_version());
-            return 0;
-        }
-        if arg == "--mcp" {
-            print("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"ready\",\"tool\":\"ooansi\"}}\n");
-            return 0;
-        }
-        i = i + 1;
+    if opts.help_mode {
+        print(render_help());
+        return Ok(0);
+    }
+    if opts.version_mode {
+        println("ooansi 0.2.0 (openOODA sovereign shell & terminal)");
+        return Ok(0);
+    }
+    if opts.mcp_mode {
+        run_mcp_server(fs);
+        return Ok(0);
     }
 
-    print("ooansi: sovereign capability-bounded utility ready\n");
-    return 0;
+    if opts.action == "" {
+        print(render_help());
+        return Ok(0);
+    }
+
+    if opts.action == "reset" {
+        print(sgr_reset());
+        return Ok(0);
+    }
+
+    if opts.action == "strip" {
+        let clean: String = strip_ansi(opts.arg1);
+        if opts.json_mode {
+            println("{\"original\":\"" + json_escape(opts.arg1) + "\",\"stripped\":\"" + json_escape(clean) + "\"}");
+        } else {
+            println(clean);
+        }
+        return Ok(0);
+    }
+
+    if opts.action == "color" {
+        let mut seq: String = "";
+        if str_starts_with(opts.arg1, "#") {
+            seq = color_code_hex(opts.arg1, false);
+        } else {
+            seq = color_code_16(opts.arg1);
+        }
+        if opts.json_mode {
+            println("{\"action\":\"color\",\"target\":\"" + json_escape(opts.arg1) + "\",\"len\":" + to_string(chars_len(seq)) + "}");
+        } else {
+            print(seq);
+        }
+        return Ok(0);
+    }
+
+    if opts.action == "style" {
+        let mut seq: String = sgr_reset();
+        if opts.arg1 == "bold" { seq = sgr_bold(); }
+        else if opts.arg1 == "dim" { seq = sgr_dim(); }
+        else if opts.arg1 == "italic" { seq = sgr_italic(); }
+        else if opts.arg1 == "underline" { seq = sgr_underline(); }
+        else if opts.arg1 == "reverse" { seq = sgr_reverse(); }
+        if opts.json_mode {
+            println("{\"action\":\"style\",\"target\":\"" + json_escape(opts.arg1) + "\"}");
+        } else {
+            print(seq);
+        }
+        return Ok(0);
+    }
+
+    if opts.action == "cursor" {
+        let count: Int = parse_int_safe(opts.arg2, 1);
+        let mut seq: String = "";
+        if opts.arg1 == "up" { seq = cursor_up(count); }
+        else if opts.arg1 == "down" { seq = cursor_down(count); }
+        else if opts.arg1 == "forward" { seq = cursor_forward(count); }
+        else if opts.arg1 == "back" { seq = cursor_back(count); }
+        else if opts.arg1 == "pos" {
+            let row: Int = parse_int_safe(opts.arg2, 1);
+            let col: Int = parse_int_safe(opts.arg3, 1);
+            seq = cursor_pos(row, col);
+        }
+        print(seq);
+        return Ok(0);
+    }
+
+    if opts.action == "clear" {
+        let seq: String = if opts.arg1 == "line" { clear_line() } else { clear_screen() };
+        print(seq);
+        return Ok(0);
+    }
+
+    print(render_help());
+    return Ok(0);
 }

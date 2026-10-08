@@ -1,9 +1,9 @@
 # Maintainer: openOODA-tools <ops@openooda.org>
 pkgname=ooansi-bin
 _pkgname=ooansi
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-pkgdesc="Applies and strips Select Graphic Rendition (SGR) escape codes from text."
+pkgdesc="ANSI terminal sequence generator."
 arch=('x86_64')
 url="https://github.com/openOODA-tools/ooansi"
 license=('Apache-2.0')

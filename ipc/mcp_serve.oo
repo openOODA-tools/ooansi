@@ -1,0 +1,122 @@
+// # MCP Stdio Server - ANSI Sequence Generator Engine
+//
+// Logline: Speaks Model Context Protocol over stdio for LLM coding agents.
+//
+// Setup: Requires FsReadCap. Dispatches ansi_generate, ansi_strip, and ansi_cursor tools.
+//
+// Beats:
+//   1. Handle initialize and notifications/initialized lifecycle handshakes.
+//   2. Advertise ansi_generate, ansi_strip, and ansi_cursor tools with JSON schemas.
+//   3. Dispatch tools/call requests and return computed ANSI escape codes.
+
+import "core/sequence.oo";
+import "core/strip.oo";
+import "render/palette.oo";
+import "ipc/json_field.oo";
+
+fn build_error(id: String, code: Int, msg: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":" + to_string(code) + ",\"message\":\"" + json_escape(msg) + "\"}}";
+}
+
+fn build_tool_result(id: String, text: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"" + json_escape(text) + "\"}]}}";
+}
+
+fn handle_tool_call(fs: &FsReadCap, id: String, req: String) -> String {
+    let params: String = json_field_raw(req, "params");
+    let tool_name: String = json_field_string(params, "name");
+    let args: String = json_field_raw(params, "arguments");
+
+    if tool_name == "ansi_generate" {
+        let color: String = json_field_string(args, "color");
+        let bold: String = json_field_raw(args, "bold");
+        let reset: String = json_field_raw(args, "reset");
+        let mut out: String = "";
+        if bold == "true" { out = out + sgr_bold(); }
+        if color != "" {
+            if str_starts_with(color, "#") {
+                out = out + color_code_hex(color, false);
+            } else {
+                out = out + color_code_16(color);
+            }
+        }
+        if reset == "true" { out = out + sgr_reset(); }
+        return build_tool_result(id, out);
+    }
+
+    if tool_name == "ansi_strip" {
+        let text: String = json_field_string(args, "text");
+        let clean: String = strip_ansi(text);
+        return build_tool_result(id, clean);
+    }
+
+    if tool_name == "ansi_cursor" {
+        let action: String = json_field_string(args, "action");
+        let count_str: String = json_field_raw(args, "count");
+        let count: Int = parse_int_safe(count_str, 1);
+        let mut seq: String = "";
+        if action == "up" { seq = cursor_up(count); }
+        else if action == "down" { seq = cursor_down(count); }
+        else if action == "forward" { seq = cursor_forward(count); }
+        else if action == "back" { seq = cursor_back(count); }
+        else { seq = clear_line(); }
+        return build_tool_result(id, seq);
+    }
+
+    return build_error(id, -32601, "unknown tool: " + tool_name);
+}
+
+fn handle_mcp_request(fs: &FsReadCap, req: String) -> String {
+    let method: String = json_field_string(req, "method");
+    let raw_id: String = json_field_raw(req, "id");
+    let id: String = if chars_len(raw_id) == 0 { "null" } else { raw_id };
+
+    if method == "initialize" {
+        return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"ooansi\",\"version\":\"0.2.0\"}}}";
+    }
+    if method == "notifications/initialized" {
+        return "";
+    }
+    if method == "tools/list" {
+        return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"tools\":[{\"name\":\"ansi_generate\",\"description\":\"Generate ANSI terminal color and styling sequences\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"color\":{\"type\":\"string\"},\"bold\":{\"type\":\"boolean\"},\"reset\":{\"type\":\"boolean\"}}}},{\"name\":\"ansi_strip\",\"description\":\"Strip all ANSI escape codes from string input\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}},{\"name\":\"ansi_cursor\",\"description\":\"Generate terminal cursor navigation sequences\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\"},\"count\":{\"type\":\"integer\"}},\"required\":[\"action\"]}}]}}";
+    }
+    if method == "tools/call" {
+        return handle_tool_call(fs, id, req);
+    }
+    if method == "shutdown" {
+        return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":null}";
+    }
+    return build_error(id, -32601, "method not found: " + method);
+}
+
+pub fn run_mcp_server(fs: &FsReadCap) -> Int {
+    let mut buf: String = "";
+    let mut running: Bool = true;
+    while running {
+        let mut nl: Int = str_index_of(buf, "\n");
+        while nl >= 0 {
+            let line: String = str_trim(str_slice(buf, 0, nl));
+            buf = str_slice(buf, nl + 1, chars_len(buf));
+            if chars_len(line) > 0 {
+                let resp: String = handle_mcp_request(fs, line);
+                if chars_len(resp) > 0 {
+                    println(resp);
+                }
+            }
+            nl = str_index_of(buf, "\n");
+        }
+
+        let cr: Result[String, String] = oo_read_stdin_chunk(fs, 100);
+        if !cr.is_ok() {
+            running = false;
+        } else {
+            let chunk: String = match cr { Ok(s) => s, Err(_) => "" };
+            if chars_len(chunk) == 0 {
+                running = false;
+            } else {
+                buf = buf + chunk;
+            }
+        }
+    }
+    return 0;
+}

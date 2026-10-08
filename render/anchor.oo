@@ -1,0 +1,11 @@
+// # ooansi Render Subsystem Anchor
+//
+// Logline: Re-exports color palette and TrueColor generation primitives.
+//
+// Setup: Pure shim re-exporting rendering components.
+//
+// Beats:
+//   1. Re-export 16-color ANSI and 256-color indexed generators.
+//   2. Re-export TrueColor RGB and hex formatters.
+
+import "palette.oo";

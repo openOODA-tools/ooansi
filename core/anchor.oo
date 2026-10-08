@@ -1,0 +1,12 @@
+// # ooansi Core Subsystem Anchor
+//
+// Logline: Re-exports sequence generation primitives and ANSI strip routines.
+//
+// Setup: Pure shim re-exporting core terminal sequence operations.
+//
+// Beats:
+//   1. Re-export ANSI sequence and cursor movement generators.
+//   2. Re-export strip_ansi text sanitization function.
+
+import "sequence.oo";
+import "strip.oo";

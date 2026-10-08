@@ -1,0 +1,9 @@
+Package: ooansi
+Version: 0.2.0-1
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: openOODA-tools <ops@openooda.org>
+Description: ANSI terminal sequence generator
+ A sovereign ANSI terminal sequence generator written in pure openOODA, featuring
+ zero ambient authority, 16-color, 256-color, and TrueColor support, and an MCP stdio server.

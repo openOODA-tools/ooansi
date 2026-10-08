@@ -1,0 +1,60 @@
+// # ANSI Color Palette and TrueColor Formatter
+//
+// Logline: Generates 16-color ANSI, 256-color indexed, and 24-bit TrueColor sequences.
+//
+// Setup: Pure color converter. Zero ambient authority.
+//
+// Beats:
+//   1. Resolve named ANSI colors to SGR codes (30-37, 90-97).
+//   2. Generate 256-color indexed foreground and background sequences.
+//   3. Convert hex strings (#RRGGBB) to 24-bit TrueColor RGB escape codes.
+
+import "core/sequence.oo";
+
+pub fn color_code_16(name: String) -> String {
+    let lower: String = str_trim(name);
+    if lower == "black" { return ansi_csi() + "30m"; }
+    if lower == "red" { return ansi_csi() + "31m"; }
+    if lower == "green" { return ansi_csi() + "32m"; }
+    if lower == "yellow" { return ansi_csi() + "33m"; }
+    if lower == "blue" { return ansi_csi() + "34m"; }
+    if lower == "magenta" { return ansi_csi() + "35m"; }
+    if lower == "cyan" { return ansi_csi() + "36m"; }
+    if lower == "white" { return ansi_csi() + "37m"; }
+    if lower == "bright-black" || lower == "gray" { return ansi_csi() + "90m"; }
+    if lower == "bright-red" { return ansi_csi() + "91m"; }
+    if lower == "bright-green" { return ansi_csi() + "92m"; }
+    if lower == "bright-yellow" { return ansi_csi() + "93m"; }
+    if lower == "bright-blue" { return ansi_csi() + "94m"; }
+    if lower == "bright-magenta" { return ansi_csi() + "95m"; }
+    if lower == "bright-cyan" { return ansi_csi() + "96m"; }
+    if lower == "bright-white" { return ansi_csi() + "97m"; }
+    return ansi_csi() + "37m";
+}
+
+pub fn color_code_256(index: Int, is_bg: Bool) -> String {
+    let code: Int = if is_bg { 48 } else { 38 };
+    return ansi_csi() + to_string(code) + ";5;" + to_string(index) + "m";
+}
+
+pub fn color_code_rgb(r: Int, g: Int, b: Int, is_bg: Bool) -> String {
+    let code: Int = if is_bg { 48 } else { 38 };
+    return ansi_csi() + to_string(code) + ";2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
+}
+
+fn hex_nibble(c: String) -> Int {
+    let b: Int = byte_at(c, 0);
+    if b >= 48 && b <= 57 { return b - 48; }
+    if b >= 97 && b <= 102 { return b - 87; }
+    if b >= 65 && b <= 70 { return b - 55; }
+    return 0;
+}
+
+pub fn color_code_hex(hex: String, is_bg: Bool) -> String {
+    let clean: String = if str_starts_with(hex, "#") { str_slice(hex, 1, chars_len(hex)) } else { hex };
+    if chars_len(clean) < 6 { return ansi_csi() + "0m"; }
+    let r: Int = (hex_nibble(char_at(clean, 0)) * 16) + hex_nibble(char_at(clean, 1));
+    let g: Int = (hex_nibble(char_at(clean, 2)) * 16) + hex_nibble(char_at(clean, 3));
+    let b: Int = (hex_nibble(char_at(clean, 4)) * 16) + hex_nibble(char_at(clean, 5));
+    return color_code_rgb(r, g, b, is_bg);
+}

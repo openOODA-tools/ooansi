@@ -1,0 +1,72 @@
+// # ANSI Terminal Sequence Generator Primitives
+//
+// Logline: Generates standard ECMA-48 / ANSI terminal escape sequences for style and control.
+//
+// Setup: Pure string formatter without ambient IO.
+//
+// Beats:
+//   1. Construct ESC and CSI (Control Sequence Introducer) byte prefixes.
+//   2. Generate Select Graphic Rendition (SGR) style and color codes.
+//   3. Generate cursor manipulation and screen clearance directives.
+
+pub fn ansi_esc() -> String {
+    return bytes_to_str(bytes_push(bytes_new(), 27));
+}
+
+pub fn ansi_csi() -> String {
+    return ansi_esc() + "[";
+}
+
+pub fn sgr_reset() -> String {
+    return ansi_csi() + "0m";
+}
+
+pub fn sgr_bold() -> String {
+    return ansi_csi() + "1m";
+}
+
+pub fn sgr_dim() -> String {
+    return ansi_csi() + "2m";
+}
+
+pub fn sgr_italic() -> String {
+    return ansi_csi() + "3m";
+}
+
+pub fn sgr_underline() -> String {
+    return ansi_csi() + "4m";
+}
+
+pub fn sgr_reverse() -> String {
+    return ansi_csi() + "7m";
+}
+
+pub fn cursor_up(n: Int) -> String {
+    return ansi_csi() + to_string(if n > 0 { n } else { 1 }) + "A";
+}
+
+pub fn cursor_down(n: Int) -> String {
+    return ansi_csi() + to_string(if n > 0 { n } else { 1 }) + "B";
+}
+
+pub fn cursor_forward(n: Int) -> String {
+    return ansi_csi() + to_string(if n > 0 { n } else { 1 }) + "C";
+}
+
+pub fn cursor_back(n: Int) -> String {
+    return ansi_csi() + to_string(if n > 0 { n } else { 1 }) + "D";
+}
+
+pub fn cursor_pos(row: Int, col: Int) -> String {
+    let r: Int = if row > 0 { row } else { 1 };
+    let c: Int = if col > 0 { col } else { 1 };
+    return ansi_csi() + to_string(r) + ";" + to_string(c) + "H";
+}
+
+pub fn clear_screen() -> String {
+    return ansi_csi() + "2J" + ansi_csi() + "H";
+}
+
+pub fn clear_line() -> String {
+    return ansi_csi() + "2K\r";
+}

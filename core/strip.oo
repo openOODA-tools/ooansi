@@ -1,0 +1,37 @@
+// # ANSI Escape Sequence Stripper and Sanitizer
+//
+// Logline: Strips all ANSI terminal escape codes from strings to produce clean plain text.
+//
+// Setup: Pure string scanner. Defends against terminal injection and formatting corruption.
+//
+// Beats:
+//   1. Scan input string for 0x1B (ESC) byte markers.
+//   2. Parse and consume CSI parameter bytes and terminal command characters.
+//   3. Emit clean string free of all ANSI color and cursor codes.
+
+pub fn strip_ansi(text: String) -> String {
+    let n: Int = chars_len(text);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let b: Int = byte_at(text, i);
+        if b == 27 {
+            i = i + 1;
+            if i < n && (byte_at(text, i) == 91 || byte_at(text, i) == 79) {
+                i = i + 1;
+                while i < n {
+                    let cmd_b: Int = byte_at(text, i);
+                    if (cmd_b >= 64 && cmd_b <= 126) {
+                        i = i + 1;
+                        break;
+                    }
+                    i = i + 1;
+                }
+            }
+        } else {
+            out = out + char_at(text, i);
+            i = i + 1;
+        }
+    }
+    return out;
+}
